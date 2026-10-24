@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>메모리 소자 지그 3D</title>
+<meta name="description" content="crossbar 메모리 소자용 XB16 지그, 기판·마스크 등록 틀, MEM-MUX16 릴레이 보드를 3D로 본다 (2026-10-24 설계 검토 반영판).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #f3f4f6; --panel: #ffffff; --fg: #1a1d24; --muted: #5f6673; --line: #dadde3; --stage: #e8eaee;
+  --accent: #2f5fa8; --hl: #c0392b; --chip: #eef1f6;
+  --font-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111318; --panel: #181b22; --fg: #e5e8ee; --muted: #9aa1ad; --line: #2b303a; --stage: #14171d;
+  --accent: #7aa5e8; --hl: #f07c6c; --chip: #222733; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111318; --panel: #181b22; --fg: #e5e8ee; --muted: #9aa1ad; --line: #2b303a; --stage: #14171d;
+  --accent: #7aa5e8; --hl: #f07c6c; --chip: #222733; color-scheme: dark }
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.5; }
+.app { display: flex; height: 100%; }
+.stage { position: relative; flex: 1 1 auto; min-width: 0; background: var(--stage); }
+#c { display: block; width: 100%; height: 100%; touch-action: none; }
+.rail { flex: 0 0 380px; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 18px max(16px, env(safe-area-inset-right, 0px)) 28px max(16px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 16px; }
+.rail > * { flex-shrink: 0; }
+h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 0 0 4px; }
+.sub { color: var(--muted); font-size: 12.5px; margin: 2px 0 0; }
+.label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--muted); margin: 0 0 6px; }
+.seg { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12.5px; padding: 7px 2px; border: 0; background: transparent; color: var(--fg); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.row { display: flex; gap: 10px; align-items: center; }
+.row input { flex: 1; accent-color: var(--accent); }
+.pn { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.info { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--chip); min-height: 92px; }
+.info p { margin: 4px 0 0; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; padding: 4px 4px; border-bottom: 1px solid var(--line); }
+td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.l { font-family: var(--font-mono); color: var(--muted); width: 30px; text-align: center; }
+tr.part { cursor: pointer; }
+tr.part:hover td { background: var(--chip); }
+tr.part.sel td { background: color-mix(in srgb, var(--hl) 16%, transparent); }
+.nums { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 12.5px; }
+.nums span:nth-child(even) { font-variant-numeric: tabular-nums; text-align: right; }
+.note { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+.hint { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px; font-size: 12px; color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 85%, transparent); padding: 4px 8px; border-radius: 6px; }
+.tagl { position: absolute; transform: translate(-50%, -100%); font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap;
+  background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; pointer-events: none; }
+.status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; pointer-events: none; }
+a { color: var(--accent); }
+@media (max-width: 760px) {
+  .app { flex-direction: column; height: auto; }
+  .stage { flex: none; height: 60svh; min-height: 320px; }
+  .rail { flex: none; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .seg button { font-size: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="c" aria-label="메모리 소자 지그 3D 장면"></canvas>
+    <div id="labels"></div>
+    <div class="status" id="status">CAD 모델을 불러오는 중…</div>
+    <div class="hint">끌어서 회전 · 휠/두 손가락으로 확대 · 부품을 누르면 설명</div>
+  </div>
+
+  <aside class="rail">
+    <div>
+      <h1>메모리 소자 측정 지그 3D</h1>
+      <p class="sub">crossbar 8 × 8 소자용 XB16 지그, 증착 마스크 등록 틀, 릴레이 보드 MEM-MUX16 · 2026-10-24 설계 검토 반영판 · 설계 개념 모델 (제작도 아님)</p>
+    </div>
+
+    <div>
+      <p class="label">보기</p>
+      <div class="seg" role="group" aria-label="보기 선택">
+        <button id="v-all" aria-pressed="true">전체</button>
+        <button id="v-xb16" aria-pressed="false">XB16 지그</button>
+        <button id="v-chip" aria-pressed="false">기판</button>
+        <button id="v-evap" aria-pressed="false">증착 세트</button>
+        <button id="v-mux" aria-pressed="false">MUX 보드</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="label">분해 (고른 묶음만 층별로 띄움)</p>
+      <div class="row"><input id="explode" type="range" min="0" max="100" value="0" aria-label="분해 정도"><span id="exv" class="pn">0 %</span></div>
+    </div>
+
+    <div class="info" id="info" aria-live="polite">
+      <h2>부품을 눌러 보세요</h2>
+      <p class="pn">3D 장면이나 아래 층 표에서 고르면 설명이 여기 나옵니다.</p>
+    </div>
+
+    <div>
+      <p class="label">핵심 숫자</p>
+      <div class="nums" id="nums"></div>
+    </div>
+
+    <div>
+      <p class="label" id="tabletitle">층 표</p>
+      <table>
+        <thead><tr><th>층</th><th>부품</th></tr></thead>
+        <tbody id="layers"></tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      기판·증착 세트의 막 두께는 보이도록 40배로 그렸다. 홀더 포켓 26.54 mm는 가정값이라 실측 뒤 마스크·등록 틀 바깥이 바뀐다.
+      MUX 보드는 부품 몸체만 상자로 그렸고 배선은 없다.
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="mem_models.js"></script>
+<script>
+(function () {
+  const INFO = window.MEM_INFO || {};
+  const GROUPS = [
+    { key: 'xb16', x: 0, y: 0, title: 'XB16 지그', scale: 1, step: 7 },
+    { key: 'chip', x: 62, y: -10, title: 'crossbar 기판 (막 40배)', scale: 1, step: 2.2 },
+    { key: 'evap', x: 62, y: 32, title: '증착 세트', scale: 1, step: 2.5 },
+    { key: 'mux', x: -150, y: 0, title: 'MEM-MUX16 보드', scale: 1, step: 10 },
+  ];
+  const LAYERS = window.MEM_LAYERS || {};
+  const LAYER_NAME = {
+    xb16: ['받침 · 스테이션', 'PCB · 핀 · 센서', '틀 · DB25 블록', '시료', '누름 링', '뚜껑'],
+    chip: ['유리', '아래 선 B', '페로브스카이트', '위 선 T'],
+    evap: ['마스크 X1', '등록 틀', '기판'],
+    mux: ['보드', '부품'],
+  };
+
+  // English CAD names -> Korean description (what it is, why, numbers)
+  function describe(n) {
+    const D = (t, d) => ({ t, d });
+    if (/^base plate XB16/.test(n)) return D('받침 X1 (검정 POM 4 mm, CNC)', '바닥에 강구 3개·자석 2개 (키네마틱), 막 쪽 아래 창 12 mm. DB25 탭 70 mm, 블록 볼트 ±30, 꼬리 포켓 50.4 (10/24 검토: 60 mm 탭에서는 너트 포켓이 옆면으로 뚫렸음)');
+    if (/^station plate/.test(n)) return D('스테이션 판 XS (POM 60 × 60 × 6)', '장비마다 하나. MS3-10 핀 두 개로 된 홈 3개에 강구가 앉아 지그가 늘 같은 자리에 놓인다. 솔라셀 지그와 같은 판');
+    if (/^groove rod/.test(n)) return D('홈 핀 MISUMI MS3-10 (Ø3 × 10)', '스테이션에 두 개씩 접착해 V홈을 만든다. 스테이션 하나에 6개');
+    if (/^kinematic magnet/.test(n)) return D('자석 MISUMI HXNN6-2 (Ø6 × 2)', '지그를 스테이션에 당겨 붙인다 (한 쌍씩)');
+    if (/^kinematic ball/.test(n)) return D('강구 SBM-SUJ-5 (Ø5)', '지그 바닥에 반쯤 접착, 스테이션 홈에 앉는다');
+    if (/^bottom PCB XB/.test(n)) return D('지그 PCB XB (FR4 1.6, 검정 ENIG)', '스프링 핀 16개 → DB25. 측정선 주변 GND 면 1.5 mm 떨어뜨림 (표면 누설). 뒷면 실크 = 실제 핀 번호 (SDA 24, SCL 12, 3V3 25, GND 13). TMP117 온도 센서는 JLC 납땜');
+    if (/^pin Mill-Max/.test(n)) { const m = n.match(/ (T\d|B\d) /); return D('스프링 핀 Mill-Max 0906-1 ' + (m ? m[1] : ''), '패드 중심 (가장자리에서 2.25 mm, 간격 4 mm). 0.9 mm 눌려 핀당 ' + (INFO.pin_force || 0.72) + ' N, 16개 ' + (INFO.pin_force_total || 11.5) + ' N'); }
+    if (/^DB25 female/.test(n)) return D('DB25 암 직각 (Assmann A-DF 25)', '16선 + I2C (TMP117) + 차폐. 플랜지가 보드 끝보다 0.5 mm 밖에 서므로 블록 자리를 1.5 mm로 둠 (10/24)');
+    if (/^DB25 block bolt/.test(n)) return D('블록 볼트 MISUMI SCB3-20 + 너트', '블록을 받침 밑 너트에 묶는다. 너트 포켓 벽 1.76 mm (탭 옆면) · 1.56 mm (꼬리 포켓)');
+    if (/^DB25 block/.test(n)) return D('DB25 블록 X4 (검정 POM, CNC)', '앞판을 4-40 잭나사로 DB25에 묶어 케이블을 꽂고 뺄 때 힘이 PCB 대신 블록·받침으로 간다');
+    if (/^jackscrew/.test(n)) return D('잭나사 Keystone 7229 (4-40)', '블록 앞판 ↔ DB25 플랜지');
+    if (/TMP117/.test(n)) return D('온도 센서 TI TMP117 (I2C 0x49)', '유리 옆 틀 아래. 습도는 N₂ 상자의 SHT45 (MUX 보드 J2에 꽂음)');
+    if (/^100 nF/.test(n)) return D('100 nF 0603', 'TMP117 전원 축전기');
+    if (/^dowel pin/.test(n)) return D('맞춤핀 MISUMI MS2-6', 'PCB와 틀의 위치를 맞춘다');
+    if (/^frame XB/.test(n)) return D('틀 X2 (검정 POM 6.2 mm, CNC)', '유리 가장자리 0.8 mm 턱 = 정지면 (핀 작동 높이 3.6 mm). 포켓 25.2, 너트 포켓, 경첩, 걸쇠 자석. 10/24: 5.9 → 6.2 (누름 폼 자리)');
+    if (/^sample: glass/.test(n)) return D('시료 유리 25 × 25 × 1.1', 'crossbar 기판, 막 면이 아래 (핀 쪽)');
+    if (/^sample: bottom lines/.test(n)) return D('아래 선 B1–B8', '배열 안 0.2 mm, 좌우 가장자리 패드 3.2 × 3.0 mm. 재료 (ITO 그대로 / 금속)는 아직 열린 결정');
+    if (/^sample: perovskite/.test(n)) return D('페로브스카이트 MAPbI₃', '좌우 아래 선 패드 띠는 닦아 낸다');
+    if (/^sample: top Ag/.test(n)) return D('위 Ag 선 T1–T8', '배열 안 0.2 mm, 위아래 가장자리 패드 3.2 × 3.0 mm');
+    if (/^press ring silicone foam/.test(n)) return D('실리콘 폼 0.5 mm (닫으면 0.3)', '유리 두께 1.0 / 1.1 / 1.2 mm에서 0.1 / 0.2 / 0.3 mm 눌린다 → 유리가 턱에 붙어 있게 (10/24 검토: 전에는 탄성 여유 0)');
+    if (/^press ring/.test(n)) return D('누름 링 X5 (POM 1.2 mm)', '유리 가장자리 띠만 누른다 (가운데 창은 열림)');
+    if (/^hinged lid/.test(n)) return D('경첩 뚜껑 X3 (검정 POM 2.5 mm)', '창 19 → 23 mm (현미경·빛), 자석 걸쇠. 뚜껑 모멘트 여유 ' + (INFO.lid_margin || 1.98) + '배 (자석 틈 0.2 mm면 약 1.4배)');
+    if (/^hinge pin/.test(n)) return D('경첩 핀 MISUMI MS2.5-30', '');
+    if (/^catch magnet/.test(n)) return D('걸쇠 자석 MISUMI HXNN6-2', '두 쌍, 맞닿으면 6.5 N씩');
+    if (/^bolt MISUMI SCB3-8/.test(n)) return D('볼트 MISUMI SCB3-8 + 너트', '아래에서 받침·PCB·틀을 묶는다');
+    if (/MEM-MUX16 보드/.test(n)) return D(n, 'K2400 HI·LO를 선 16개 중 둘에 잇는 릴레이 보드. Hammond 1590E 상자 안');
+    if (/리드 릴레이 K(\d+)/.test(n)) { const k = +n.match(/K(\d+)/)[1];
+      return D(n, k <= 16 ? '선 L' + k + ' → HI 버스' : k <= 32 ? '선 L' + (k - 16) + ' → LO 버스' :
+        ({ 33: '직렬 1 kΩ 빼기 (평소 열림 = 1 kΩ 직렬)', 34: '병렬 4.7 nF', 35: '병렬 10 nF', 36: 'shunt 49.9 Ω 빼기 (평소 닫힘)', 37: '10 kΩ 기준 저항' })[k] || ''); }
+    if (/드라이버 U5/.test(n)) return D(n, '옵션 릴레이 K33–K37 + 남는 채널 하나로 K2400 출력 허용선 (J3)을 GND로 당긴다');
+    if (/드라이버/.test(n)) return D(n, '릴레이 코일 8개씩 (4행의 HI·LO)');
+    if (/I2C 확장/.test(n)) return D(n, 'Pico의 I2C로 릴레이 37개 + 출력 허용선');
+    if (/Pico/.test(n)) return D(n, 'USB 명령 (SEL / OPT / OPEN / OFF). 하드웨어 WDT 8 s: 멈추면 재시작 → 모두 열림');
+    if (/DB25 수/.test(n)) return D(n, '지그 케이블 (0.76 m 차폐, 1:1)');
+    if (/^J2 /.test(n)) return D(n, 'N₂ 상자의 SHT45 습도 모듈 (3V3 GND SCL SDA)');
+    if (/^J3 /.test(n)) return D(n, 'K2400 뒤 DIGITAL I/O 출력 허용선. 릴레이를 바꾸는 동안 출력이 하드웨어로 꺼진다 (핀 번호는 설명서 확인)');
+    if (/^TP/.test(n)) return D(n, '앞판 바인딩 포스트·SMA로 가는 선 자리');
+    if (/마스크 X1/.test(n)) return D(n, '증착 홀더 포켓에 들어가는 SUS 마스크. 아래 선 무늬가 뚫려 있다');
+    if (/등록 틀/.test(n)) return D(n, '기판을 마스크 위 같은 자리에 잡아 주는 얇은 틀 (스텐실 판에 같이 만든다). 이것이 없으면 기판이 포켓 안에서 ±0.77 mm 놀아 핀이 패드를 벗어날 수 있다');
+    if (/^기판/.test(n)) return D(n, '25 × 25 × 1.1, 막 면이 마스크에 닿는다');
+    if (/^아래 선|^위 선|^페로브|^기판 유리/.test(n)) return D(n, '막 두께는 보이도록 40배');
+    return D(n, '');
+  }
+
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = Math.PI * 0.49;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f98, 0.85));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.9); sun.position.set(-120, 220, 160); scene.add(sun);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.35); fill.position.set(160, 80, -120); scene.add(fill);
+  const grid = new THREE.GridHelper(420, 42, 0x9aa1ad, 0xc3c8d0); grid.position.y = -12.5; scene.add(grid);
+  const world = new THREE.Group(); world.rotation.x = -Math.PI / 2; scene.add(world);   // CAD z-up -> three y-up
+  const meshes = []; const groups = {};
+  let selected = null, view = 'all', loaded = 0;
+
+  function applyTheme() {
+    scene.background = new THREE.Color(css('--stage'));
+    const dark = css('--bg').toLowerCase() === '#111318';
+    grid.material.color.set(dark ? 0x2b303a : 0xc3c8d0);
+  }
+
+  const loader = new THREE.GLTFLoader();
+  GROUPS.forEach((G) => {
+    const b64 = (window.MEM_GLB || {})[G.key];
+    if (!b64) { document.getElementById('status').textContent = '모델 파일을 불러오지 못했습니다. 새로 고침해 보세요.'; return; }
+    const buf = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)).buffer;
+    loader.parse(buf, '', (gltf) => {
+      const g = new THREE.Group(); g.position.set(G.x, G.y, 0); g.add(gltf.scene); world.add(g); groups[G.key] = g;
+      const layer = Object.fromEntries(LAYERS[G.key] || []);
+      const san = (s) => s.replace(/\s/g, '_').replace(/[\[\]\.:\/]/g, '');
+      const bySan = {}; for (const [n] of LAYERS[G.key] || []) bySan[san(n)] = n;
+      const lookup = (s) => bySan[s] || bySan[s.replace(/_\d+$/, '')] || null;
+      gltf.scene.traverse((o) => {
+        if (!o.isMesh) return;
+        const pname = lookup(o.name) || (o.parent && lookup(o.parent.name)) || o.name;
+        const ca = o.geometry.getAttribute('color'), base = new THREE.Color();
+        const k = ca && ca.normalized && ca.array instanceof Uint8Array ? 1 / 255 : 1;   // r128 returns raw bytes
+        if (ca) base.setRGB(ca.getX(0) * k, ca.getY(0) * k, ca.getZ(0) * k).convertSRGBToLinear();
+        else if (o.material && o.material.color) base.copy(o.material.color);
+        const metal = /Mill-Max|MISUMI|jackscrew|magnet|DB25 female|DB25 수/.test(pname);
+        const glass = /glass|유리|^기판 \(/.test(pname);
+        o.material = new THREE.MeshStandardMaterial({ color: base, flatShading: true, roughness: metal ? 0.35 : 0.7, metalness: metal ? 0.5 : 0.05,
+          transparent: glass, opacity: glass ? 0.6 : 1 });
+        o.geometry.deleteAttribute && o.geometry.deleteAttribute('color');
+        o.userData = { group: G.key, name: pname, layer: layer[pname] || 0, z0: o.position.z, d: describe(pname) };
+        meshes.push(o);
+      });
+      if (++loaded === GROUPS.length) { document.getElementById('status').hidden = true; applyTheme(); fillTable(); frame('all', true); }
+    }, () => { document.getElementById('status').textContent = G.title + ' 모델을 읽지 못했습니다.'; });
+  });
+
+  // labels
+  const labelBox = document.getElementById('labels');
+  const labels = GROUPS.map((G) => { const el = document.createElement('div'); el.className = 'tagl'; el.textContent = G.title; labelBox.appendChild(el); return { G, el }; });
+
+  // numbers
+  const nums = [
+    ['지그 두께', (INFO.thickness || '') + ' mm'], ['핀 힘', (INFO.pin_force || '') + ' N/핀 · 16개 ' + (INFO.pin_force_total || '') + ' N'],
+    ['뚜껑 모멘트 여유', (INFO.lid_margin || '') + '배'], ['DB25 탭', (INFO.tab_w || '') + ' mm'],
+    ['패드 (가장자리 × 깊이)', (INFO.pad || []).join(' × ') + ' mm'],
+    ['등록 틀 바깥 / 창', INFO.spacer ? INFO.spacer.outer_mm + ' / ' + INFO.spacer.window_mm + ' mm' : ''],
+    ['홀더 포켓 (가정)', (INFO.pocket || '') + ' mm'], ['MUX 보드', (INFO.mux_size || []).join(' × ') + ' mm'],
+  ];
+  document.getElementById('nums').innerHTML = nums.map(([a, b]) => '<span>' + a + '</span><span>' + b + '</span>').join('');
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function fillTable() {
+    const keys = view === 'all' ? ['xb16'] : [view];
+    document.getElementById('tabletitle').textContent = '층 표 · ' + GROUPS.find((g) => g.key === keys[0]).title;
+    const rows = [];
+    for (const key of keys) {
+      const seen = new Set();
+      const list = (LAYERS[key] || []).slice().sort((a, b) => a[1] - b[1]);
+      for (const [n, l] of list) {
+        const d = describe(n);
+        const t = /^pin Mill-Max/.test(n) ? '스프링 핀 Mill-Max 0906-1 ×16' : /^groove rod/.test(n) ? '홈 핀 MS3-10 ×6' :
+          /리드 릴레이 K([1-9]|[12]\d|3[0-2])\b/.test(n) ? '리드 릴레이 매트릭스 K1–K32' : /0603/.test(n) && key === 'mux' ? '0603 R·C' : d.t;
+        if (seen.has(t)) continue; seen.add(t);
+        const ln = (LAYER_NAME[key] || [])[l] || l;
+        rows.push('<tr class="part" data-name="' + esc(n) + '" data-group="' + key + '"><td class="l" title="' + esc(ln) + '">' + l + '</td><td>' + esc(t) + '</td></tr>');
+      }
+    }
+    document.getElementById('layers').innerHTML = rows.join('');
+    document.querySelectorAll('tr.part').forEach((tr) => tr.addEventListener('click', () => {
+      const m = meshes.find((x) => x.userData.name === tr.dataset.name && x.userData.group === tr.dataset.group); select(m || null); }));
+  }
+
+  function highlight(m) { for (const x of meshes) x.material.emissive.setHex(0x000000); if (m) m.material.emissive.setHex(0x5a1a10); }
+  function select(m) {
+    selected = m; highlight(m);
+    const info = document.getElementById('info');
+    document.querySelectorAll('tr.part').forEach((tr) => tr.classList.toggle('sel', !!m && tr.dataset.name === m.userData.name));
+    if (!m) { info.innerHTML = '<h2>부품을 눌러 보세요</h2><p class="pn">3D 장면이나 아래 층 표에서 고르면 설명이 여기 나옵니다.</p>'; return; }
+    const d = m.userData.d, g = GROUPS.find((x) => x.key === m.userData.group);
+    info.innerHTML = '<h2>' + esc(d.t) + '</h2>' + (d.d ? '<p>' + esc(d.d) + '</p>' : '') +
+      '<p class="pn">' + esc(g.title) + ' · 층 ' + m.userData.layer + ' (' + esc((LAYER_NAME[g.key] || [])[m.userData.layer] || '') + ')</p>';
+  }
+
+  // view + explode
+  const ex = document.getElementById('explode'), exv = document.getElementById('exv');
+  function applyExplode() {
+    const t = ex.value / 100;
+    for (const m of meshes) {
+      const G = GROUPS.find((g) => g.key === m.userData.group);
+      const on = view === 'all' || view === m.userData.group;
+      m.position.z = m.userData.z0 + (on ? m.userData.layer * G.step * t : 0);
+    }
+  }
+  let animId = 0;
+  function frame(key, instant) {
+    view = key; applyExplode(); fillTable();
+    document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.id === 'v-' + key)));
+    const G = GROUPS.find((g) => g.key === key);
+    const t = ex.value / 100;
+    const target = key === 'all' ? new THREE.Vector3(-45, 4, 0) : new THREE.Vector3(G.x, 2 + (key === 'xb16' ? 8 : 0) * (1 + t), -G.y);
+    const base = key === 'all' ? 330 : key === 'mux' ? 230 : key === 'xb16' ? 120 + 60 * t : 55 + 20 * t;
+    const dist = base * Math.max(1, 1.2 / camera.aspect);
+    const pos = target.clone().add(new THREE.Vector3(dist * 0.5, dist * 0.68, dist * 0.78));
+    const id = ++animId;
+    if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(pos); controls.target.copy(target); return; }
+    const p0 = camera.position.clone(), t0 = controls.target.clone(), start = performance.now();
+    (function step(now) { if (id !== animId) return; const k = Math.min(1, (now - start) / 600), e = k * k * (3 - 2 * k);
+      camera.position.lerpVectors(p0, pos, e); controls.target.lerpVectors(t0, target, e); if (k < 1) requestAnimationFrame(step); })(start);
+  }
+  ['all', 'xb16', 'chip', 'evap', 'mux'].forEach((k) => document.getElementById('v-' + k).addEventListener('click', () => frame(k)));
+  ex.addEventListener('input', () => { exv.textContent = ex.value + ' %'; applyExplode(); });
+
+  // picking
+  const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(); let down = null;
+  canvas.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+    const r = canvas.getBoundingClientRect(); ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ptr, camera);
+    const hit = ray.intersectObjects(meshes, false)[0];
+    select(hit ? hit.object : null);
+  });
+
+  function resize() { const r = canvas.parentElement.getBoundingClientRect(); renderer.setSize(r.width, r.height, false);
+    camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix(); }
+  new ResizeObserver(resize).observe(canvas.parentElement); resize();
+  const v = new THREE.Vector3();
+  (function tick() {
+    controls.update(); renderer.render(scene, camera);
+    const r = canvas.getBoundingClientRect();
+    for (const { G, el } of labels) {
+      const show = loaded === GROUPS.length && (view === 'all' || view === G.key);
+      el.hidden = !show; if (!show) continue;
+      v.set(G.x, G.key === 'xb16' ? 22 : G.key === 'mux' ? 18 : 8, -(G.y + (G.key === 'mux' ? -52 : G.key === 'xb16' ? 0 : -16))).project(camera);
+      el.style.left = ((v.x + 1) / 2 * r.width) + 'px'; el.style.top = ((1 - v.y) / 2 * r.height) + 'px';
+    }
+    requestAnimationFrame(tick);
+  })();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</body>
+</html>
