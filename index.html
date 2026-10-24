@@ -305,11 +305,12 @@ a { color: var(--accent); }
   let animId = 0;
   function frame(key, instant) {
     view = key; applyExplode(); fillTable();
+    for (const k in groups) groups[k].visible = key === 'all' || key === k;   // one group at a time, except the overview
     document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.id === 'v-' + key)));
     const G = GROUPS.find((g) => g.key === key);
     const t = ex.value / 100;
     const target = key === 'all' ? new THREE.Vector3(-45, 4, 0) : new THREE.Vector3(G.x, 2 + (key === 'xb16' ? 8 : 0) * (1 + t), -G.y);
-    const base = key === 'all' ? 330 : key === 'mux' ? 230 : key === 'xb16' ? 120 + 60 * t : 55 + 20 * t;
+    const base = key === 'all' ? 400 : key === 'mux' ? 230 : key === 'xb16' ? 120 + 60 * t : 55 + 20 * t;
     const dist = base * Math.max(1, 1.2 / camera.aspect);
     const pos = target.clone().add(new THREE.Vector3(dist * 0.5, dist * 0.68, dist * 0.78));
     const id = ++animId;
@@ -320,6 +321,7 @@ a { color: var(--accent); }
   }
   ['all', 'xb16', 'chip', 'evap', 'mux'].forEach((k) => document.getElementById('v-' + k).addEventListener('click', () => frame(k)));
   ex.addEventListener('input', () => { exv.textContent = ex.value + ' %'; applyExplode(); });
+  ex.addEventListener('change', () => frame(view));
 
   // picking
   const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(); let down = null;
@@ -342,7 +344,8 @@ a { color: var(--accent); }
     for (const { G, el } of labels) {
       const show = loaded === GROUPS.length && (view === 'all' || view === G.key);
       el.hidden = !show; if (!show) continue;
-      v.set(G.x, G.key === 'xb16' ? 22 : G.key === 'mux' ? 18 : 8, -(G.y + (G.key === 'mux' ? -52 : G.key === 'xb16' ? 0 : -16))).project(camera);
+      const tt = (view === G.key || view === 'all') ? ex.value / 100 : 0;
+      v.set(G.x, (G.key === 'xb16' ? 22 + 40 * tt : G.key === 'mux' ? 18 + 12 * tt : 8 + 8 * tt), -(G.y + (G.key === 'mux' ? -52 : G.key === 'xb16' ? 0 : -16))).project(camera);
       el.style.left = ((v.x + 1) / 2 * r.width) + 'px'; el.style.top = ((1 - v.y) / 2 * r.height) + 'px';
     }
     requestAnimationFrame(tick);
