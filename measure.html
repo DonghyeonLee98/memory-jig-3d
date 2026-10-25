@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>메모리 지그 연결 연습</title>
+<meta name="description" content="메모리 소자 1세대 지그(SM 보드, DB15)를 K2400에 연결하는 순서: DB15 핀 배치, 브레이크아웃 손 측정, MUX 경유 명령 순서, 체인 점검, 출력 OFF 규칙.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Same layout as assembly.html: the bench (connector / wiring drawing) beside a rail of eight steps. */
+:root {
+  --bg: #f3f4f6; --panel: #ffffff; --fg: #1a1d24; --muted: #5f6673; --line: #dadde3; --stage: #e8eaee;
+  --accent: #2f5fa8; --ok: #1f7a4d; --bad: #b3261e; --hl: #c0392b; --hi: #c0392b; --lo: #1a1d24; --pin: #c9a227; --chip: #eef1f6;
+  --font-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111318; --panel: #181b22; --fg: #e5e8ee; --muted: #9aa1ad; --line: #2b303a; --stage: #14171d;
+  --accent: #7aa5e8; --ok: #5cc392; --bad: #ff8a80; --hl: #f07c6c; --hi: #f07c6c; --lo: #e5e8ee; --pin: #d8b440; --chip: #222733; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111318; --panel: #181b22; --fg: #e5e8ee; --muted: #9aa1ad; --line: #2b303a; --stage: #14171d;
+  --accent: #7aa5e8; --ok: #5cc392; --bad: #ff8a80; --hl: #f07c6c; --hi: #f07c6c; --lo: #e5e8ee; --pin: #d8b440; --chip: #222733; color-scheme: dark }
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+.app { display: flex; height: 100vh; height: 100svh; }
+.stage { position: relative; flex: 1 1 auto; min-width: 0; background: var(--stage); overflow: hidden; display: grid; place-items: center; padding: 16px; }
+#bench { width: 100%; height: 100%; max-width: 820px; max-height: 620px; }
+#bench text { font-family: var(--font-body); fill: var(--fg); }
+#bench .mono { font-family: var(--font-mono); }
+.rail { flex: 0 0 400px; min-height: 0; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) 28px max(16px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 14px; }
+.rail > * { flex-shrink: 0; }
+a { color: var(--accent); }
+.back { font-size: 12.5px; font-weight: 600; text-decoration: none; }
+h1 { font-size: 19px; font-weight: 700; margin: 2px 0 0; letter-spacing: -0.01em; }
+.sub { color: var(--muted); font-size: 12.5px; margin: 2px 0 0; }
+.nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.nav button { font: inherit; font-size: 12px; padding: 5px 4px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--fg); cursor: pointer; text-align: left; line-height: 1.25; }
+.nav button b { display: block; font-size: 11px; color: var(--muted); }
+.nav button.done { border-color: var(--accent); color: var(--accent); }
+.nav button[aria-current="step"] { background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 600; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
+.card h2 { font-size: 16px; margin: 0; text-wrap: balance; }
+.card p { margin: 0; font-size: 13.5px; }
+.card .label { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.card .note { font-size: 12.5px; color: var(--muted); }
+.opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.opt { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; text-align: left; }
+.opt[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.field select, .field input { font: inherit; font-size: 13px; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); min-width: 0; }
+.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.read { border-radius: 8px; background: var(--chip); padding: 8px 10px; font-size: 13px; }
+.read.ok { color: var(--ok); } .read.bad { color: var(--bad); }
+.btn { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 13px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--fg); border-color: var(--line); }
+.ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
+button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+td { padding: 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child { font-family: var(--font-mono); width: 44px; }
+details summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.dont ul, .notes ul { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; display: grid; gap: 3px; }
+.notes ul { color: var(--muted); }
+.selftest { font-size: 12px; color: var(--muted); margin: 0; }
+.toast { position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 13px; max-width: 90%; }
+@media (max-width: 760px) {
+  .app { flex-direction: column; height: auto; min-height: 100svh; }
+  .stage { flex: 0 0 auto; height: 44vh; height: 44svh; min-height: 260px; }
+  .rail { flex: 1 1 auto; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <svg id="bench" viewBox="0 0 100 72" role="img" aria-label="연결 그림"></svg>
+    <div class="toast" id="toast" hidden></div>
+  </div>
+  <aside class="rail">
+    <header>
+      <a class="back" href="./">← 메모리 지그 3D 보기</a>
+      <h1>메모리 지그 연결 연습</h1>
+      <p class="sub">1세대 지그(솔라셀 몸체 + SM 보드, DB15)를 K2400에 잇는 여덟 단계. 고르는 대로 그림과 읽은 값이 바뀌고, 마지막 단계에서 무엇이 틀렸는지 나온다. 값은 예시다. 조립은 <a href="assembly.html">조립하는 법</a>.</p>
+    </header>
+    <div class="nav" id="nav"></div>
+    <section class="card" id="card" aria-live="polite"></section>
+    <div class="ctrl"><button class="btn ghost" id="prev" type="button">← 앞</button><button class="btn" id="next" type="button">다음 →</button><button class="btn ghost" id="reset" type="button">처음부터</button></div>
+    <details open><summary>DB15 핀 배치 (SM 보드)</summary><table id="pinmap"></table></details>
+    <details class="dont" open><summary>하지 말 것</summary><ul id="dont"></ul></details>
+    <details class="notes"><summary>확인 전 (설계 파일이 오면 맞춤)</summary><ul id="notes"></ul></details>
+    <p class="selftest" id="selftest"></p>
+  </aside>
+</div>
+<script src="measure.js"></script>
+</body>
+</html>

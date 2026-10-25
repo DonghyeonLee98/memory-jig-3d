@@ -54,6 +54,10 @@ tr.part.sel td { background: color-mix(in srgb, var(--hl) 16%, transparent); }
 .nums { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 12.5px; }
 .nums span:nth-child(even) { font-variant-numeric: tabular-nums; text-align: right; }
 .note { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+.gen { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.gen p { margin: 0; font-size: 13px; }
+.gen .links { margin-top: 6px; font-weight: 600; }
+.gen a { color: var(--accent); }
 .hint { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px; font-size: 12px; color: var(--muted);
   background: color-mix(in srgb, var(--panel) 85%, transparent); padding: 4px 8px; border-radius: 6px; }
 .tagl { position: absolute; transform: translate(-50%, -100%); font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap;
@@ -80,7 +84,13 @@ a { color: var(--accent); }
   <aside class="rail">
     <div>
       <h1>메모리 소자 측정 지그 3D</h1>
-      <p class="sub">crossbar 8 × 8 소자용 XB16 지그, 증착 마스크 등록 틀, 릴레이 보드 MEM-MUX16 · 2026-10-24 설계 검토 반영판 · 설계 개념 모델 (제작도 아님)</p>
+      <p class="sub">2세대(crossbar 8 × 8)용 XB16 지그, 증착 마스크 등록 틀, 릴레이 보드 MEM-MUX16 · 2026-10-24 설계 검토 반영판 · 설계 개념 모델 (제작도 아님)</p>
+    </div>
+
+    <div class="gen">
+      <p class="label">1세대 (10/26 결정)</p>
+      <p>1세대는 솔라셀 지그 몸체(S1–S5)에 메모리용 SM 보드(핀 12, DB15)를 끼워 쓴다: 셀 8개(1.0 / 0.5 / 0.25 mm²) + Ag 줄 양끝 + 손가락 저항 접점 2. 이 화면의 XB16은 2세대용으로 보관한다. SM 지그 3D는 모델이 나오면 여기에 더한다.</p>
+      <p class="links"><a href="assembly.html">조립하는 법 (연습)</a> · <a href="measure.html">연결하는 법 (연습)</a></p>
     </div>
 
     <div>
