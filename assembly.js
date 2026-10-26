@@ -6,8 +6,9 @@
  *          { t: 'pick', lab, items: [label], decoys: [{ t, hint }], ordered? }   pick the right things (in order if ordered)
  *          { t: 'pads', want: [pin], avoid: { pin: hint } }           tap the pads on the drawing (or their buttons)
  *          { t: 'kit', rows: [{ label, qty }] }                       tick the parts list
- * The bench is a drawing made from the design numbers (pins = XB16 positions, Ag line y = +2 mm); it becomes the SM jig 3D model
- * once that model exists. window.__asm = { validate(), runAll(), state } is the self-test used for the line under the rail. */
+ * Geometry = design session 10/26 (gen1_261026.json: lanes, widths, pads 0.85-3.85 from the edge, R1 = T8-B8, R2 = T2-B7;
+ * sm_jig_params_261026.json: blank dark tile 0.2 for the foam). The substrate is drawn film up (= DXF, x = -x_jig); bodies are
+ * simplified, lanes and widths are the design values. The SM jig 3D model is in the 3D view (index.html, 1세대 SM). window.__asm = { validate(), runAll(), state } is the self-test used for the line under the rail. */
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -18,10 +19,13 @@
   // ============================================================ geometry (mm, glass centre = 0, y up)
   const PIN = { T1: [6, 10.25], T3: [2, 10.25], T5: [-2, 10.25], T7: [-6, 10.25], T2: [6, -10.25], T4: [2, -10.25], T6: [-2, -10.25], T8: [-6, -10.25],
     B1: [10.25, 6], B2: [-10.25, 6], B3: [10.25, 2], B4: [-10.25, 2], B5: [10.25, -2], B6: [-10.25, -2], B7: [10.25, -6], B8: [-10.25, -6] };
-  const FINGERS = ['T7', 'T8', 'T5', 'T6', 'T3', 'T4', 'T1', 'T2'];          // left to right in the crossing zone (concept lanes)
-  const WIDTH = { T7: 2.0, T8: 1.0, T5: 2.0, T6: 1.0, T3: 2.0, T4: 1.0, T1: 0.5, T2: 0.5 };   // 3 x 2.0, 3 x 1.0, 2 x 0.5 mm
-  const LANE = (n) => PIN[n][0] + (PIN[n][1] > 0 ? -0.9 : 0.9);
-  const AG_PADS = ['B3', 'B4'], CONTACTS = { B7: 'T2', B8: 'T8' }, UNUSED = ['B1', 'B2', 'B5', 'B6'];
+  const FINGERS = ['T7', 'T8', 'T5', 'T6', 'T3', 'T4', 'T1', 'T2'];          // cells C1..C8, left to right in the JIG frame
+  const WIDTH = { T7: 1.0, T8: 0.5, T5: 2.0, T6: 2.0, T3: 1.0, T4: 2.0, T1: 1.0, T2: 0.5 };   // gen1_261026.json lanes: 3 x 2.0, 3 x 1.0, 2 x 0.5
+  const LANE_X = { T7: -6.75, T8: -5.25, T5: -3.5, T6: -1.0, T3: 1.25, T4: 3.5, T1: 5.5, T2: 7.25 };            // lane_x_jig_mm
+  const CELL = Object.fromEntries(FINGERS.map((n, i) => [n, 'C' + (i + 1)]));
+  const LANE = (n) => LANE_X[n];
+  const AG_PADS = ['B3', 'B4'], CONTACTS = { B8: 'T8', B7: 'T2' }, UNUSED = ['B1', 'B2', 'B5', 'B6'];   // R1 = T8-B8 (C2), R2 = T2-B7 (C8)
+  const PAD_C = 10.15;                                                          // pad centre from the middle (0.85-3.85 from the edge)
   const WIPE = FINGERS.concat(Object.keys(CONTACTS));                           // 10 ITO pads under pins
   const AG_W = 0.5, AG_Y = 2.0;
   const cellArea = (n) => (AG_W * WIDTH[n]).toFixed(2);
@@ -29,7 +33,7 @@
   // ============================================================ steps (data)
   const GEN1_STEPS = [
     { id: 'ito', phase: '기판 준비', view: 'sub', title: 'ITO 식각: 손가락 8개 패턴',
-      say: '25 × 25 ITO 유리에서 손가락 8개(셀 폭 2.0 / 1.0 / 0.5 mm, 3 / 3 / 2개)와 핀 패드, 손가락 저항 접점 연결만 남기고 ITO를 걷어낸다. 업체 패턴 유리를 쓰거나 테이프 · 레이저 컷 스텐실 + Zn/HCl로 식각한다.',
+      say: '25 × 25 ITO 유리에서 손가락 8개(셀 폭 2.0 / 1.0 / 0.5 mm, 3 / 3 / 2개)와 패드 10, 접점 연결 띠 2만 남기고 ITO를 걷어낸다 (gen1_ITO_fingers.dxf). 업체 패턴 유리 또는 테이프 · 레이저 컷 스텐실 + Zn/HCl — 어느 쪽인지는 결정 대기.',
       tip: '셀 면적 = Ag 줄 폭 0.5 × 손가락 폭이라, ITO 폭(식각 ±0.1)이 면적을 정한다.',
       tasks: [{ t: 'quiz', q: '어떤 ITO 패턴을 쓰나?', opts: [
         { t: '손가락 8개 + 핀 패드 + 접점 연결 (1 × 8 crossbar)', ok: true },
@@ -54,8 +58,8 @@
         B6: '1세대 SM 보드에는 이 자리에 핀이 없다 (B1 · B2 · B5 · B6은 2세대 16선용).' } }],
       apply: (s) => { s.wiped = new Set(WIPE); } },
     { id: 'ag', phase: '기판 준비', view: 'sub', title: 'Ag 증착: 등록 틀 + Ag 마스크 한 장',
-      say: '등록 틀 안에 기판을 넣고 Ag 마스크 한 장을 얹어 증착한다. 마스크 구멍 = Ag 줄 0.5 × 21 mm + 양끝 패드 B3 · B4 + 닦은 ITO 패드 위 접촉 패드(3.2 × 3.0에서 안쪽 0.3).',
-      tip: 'Ag 줄이 폭 2 mm 교차 구역(y = 2.0 ± 1.0) 안에만 들어오면 된다. 8 × 8의 0.1 mm 선 맞춤보다 훨씬 쉽다.',
+      say: '등록 틀(창 25.10) 안에 기판을 넣고 Ag 마스크 한 장(바깥 26.44, 구멍 11)을 얹어 증착한다. 구멍 = Ag 줄 0.5 × 17.3 + 끝 패드 B3 · B4 (3.2 × 3.0) + 닦은 ITO 패드 위 접촉 패드 10 (2.6 × 2.4).',
+      tip: 'Ag 줄이 교차 구역(y = 2.0 ± 1.0) 안이면 된다: 등록 최악 0.43 mm에서도 목 여유 0.82 mm. 8 × 8의 0.1 mm 선 맞춤보다 훨씬 쉽다.',
       tasks: [{ t: 'pick', lab: '증착 홀더에 넣는 순서', ordered: true, items: ['등록 틀을 홀더 포켓에', '기판 (막면이 마스크 쪽)', 'Ag 마스크 한 장'],
         decoys: [{ t: 'X1 · X2 마스크 두 장', hint: 'X1 · X2는 8 × 8 (2세대)용이다. 1세대는 Ag 마스크 한 장이다.' },
           { t: '솔라셀 화소 마스크 (구멍 4개)', hint: '그건 측정용 빛 마스크다. 메모리 셀 면적은 Ag 줄 × ITO 손가락이 정한다.' }] }],
@@ -64,13 +68,13 @@
       say: '몸체는 솔라셀 싱글 지그 S1–S5 그대로다. 다른 것은 PCB 한 장(SM 보드: 핀 12개, 센서 없음)뿐이다.',
       tasks: [{ t: 'kit', rows: [{ label: 'S1 받침 (강구 3 · 자석 2 붙은 것)', qty: '1' }, { label: 'SM 보드 (핀 12 납땜, DB15)', qty: '1' },
         { label: '맞춤핀 MS2-6', qty: '2' }, { label: 'S2 프레임 (0.8 턱, 유리 포켓 25.2)', qty: '1' }, { label: '볼트 SCB3-8 + 너트', qty: '4' },
-        { label: 'S4 누름 링 POM 1.0 + 실리콘 폼 0.5', qty: '1' }, { label: 'S3 뚜껑 (경첩 MS2.5-30, 자석 걸쇠)', qty: '1' },
+        { label: '빈 dark 타일 0.2 (측정 마스크 자리)', qty: '1' }, { label: 'S4 누름 링 POM 1.0 + 실리콘 폼 0.5', qty: '1' }, { label: 'S3 뚜껑 (경첩 MS2.5-30, 자석 걸쇠)', qty: '1' },
         { label: 'S5 DB15 블록 + 잭나사 7229 ×2 + SCB3-20 ×2', qty: '1' }] }],
       apply: (s) => { s.kit = true; } },
     { id: 'body', phase: '지그 장착', view: 'jig', title: '받침 → SM 보드 → 프레임',
       say: 'S1 받침에 SM 보드를 놓고 맞춤핀 두 개로 자리를 잡은 뒤 S2 프레임을 덮고 SCB3-8 네 개로 조인다. 프레임의 0.8 mm 턱이 유리의 멈춤면이라 핀 눌림이 0.9 mm로 고정된다.',
       tasks: [{ t: 'pick', lab: '쌓는 순서', ordered: true, items: ['S1 받침', 'SM 보드 + 맞춤핀 2', 'S2 프레임 + SCB3-8 ×4'],
-        decoys: [{ t: '솔라셀 S 보드', hint: 'S 보드는 솔라셀 화소 핀 자리다. 메모리 기판에는 SM 보드(핀 12, XB16 좌표)를 쓴다. 외곽 · 구멍 · DB15 자리는 같다.' },
+        decoys: [{ t: '솔라셀 S 보드', hint: 'S 보드는 솔라셀 화소 핀 자리다. 메모리 기판에는 SM 보드(핀 12)를 쓴다. 외곽 · 구멍 · DB15 자리는 같다 (공통 형상 25개 편차 0).' },
           { t: 'XB 보드 (핀 16, DB25)', hint: 'XB는 2세대 XB16 지그용이다. 솔라셀 몸체에는 안 들어간다.' }] }],
       apply: (s) => { s.layers.add('base'); s.layers.add('pcb'); s.layers.add('frame'); } },
     { id: 'glass', phase: '지그 장착', view: 'jig', title: '기판 넣기: 막면 아래',
@@ -80,11 +84,13 @@
         { t: '막면 위', hint: '핀은 모두 아래에서 올라온다. 막면이 위면 핀이 유리 뒷면에 닿아 아무것도 연결되지 않는다.' },
         { t: '90° 돌려서', hint: '핀 자리는 대칭이 아니다 (T 핀 8개 위아래, B3 · B4 · B7 · B8 옆). 돌리면 핀이 엉뚱한 패드나 막에 닿는다.' }] }],
       apply: (s) => { s.layers.add('glass'); } },
-    { id: 'ring', phase: '지그 장착', view: 'jig', title: '누름 링 + 폼, 뚜껑 닫기',
-      say: '1.1T 유리면 누름 링(POM 1.0) + 실리콘 폼 0.5를 얹고 뚜껑을 내려 자석 걸쇠가 "딸깍" 붙게 한다. 솔라셀 화소 마스크는 넣지 않는다.',
-      tasks: [{ t: 'pick', lab: '유리 위에 올리는 것', ordered: true, items: ['누름 링 POM 1.0 + 폼 0.5', 'S3 뚜껑 닫기 (걸쇠 딸깍)'],
-        decoys: [{ t: '솔라셀 화소 마스크 0.2 mm', hint: '빛을 쓰지 않는 메모리 측정에는 필요 없다. 마스크 두께만큼 누름이 달라진다.' }] }],
-      apply: (s) => { s.layers.add('ring'); s.layers.add('lid'); } },
+    { id: 'ring', phase: '지그 장착', view: 'jig', title: '빈 타일 · 누름 링 + 폼, 뚜껑 닫기',
+      say: '솔라셀 측정 마스크 자리에 빈 dark 타일 0.2를 넣고, 1.1T 유리면 누름 링(POM 1.0) + 실리콘 폼 0.5를 얹은 뒤 뚜껑을 내려 자석 걸쇠가 "딸깍" 붙게 한다.',
+      tip: '타일이 없으면 폼이 0.5 (자유 높이) 그대로라 유리를 누르지 않는다. 타일이 있으면 솔라셀과 같이 0.3으로 눌린다.',
+      tasks: [{ t: 'pick', lab: '유리 위에 올리는 것', ordered: true, items: ['빈 dark 타일 0.2', '누름 링 POM 1.0 + 폼 0.5', 'S3 뚜껑 닫기 (걸쇠 딸깍)'],
+        decoys: [{ t: '솔라셀 화소 마스크 (구멍 4개)', hint: '메모리 셀 면적은 Ag 줄 × 손가락이 정한다. 같은 두께의 빈 dark 타일을 넣는다 (빛도 막는다).' },
+          { t: '아무것도 없이 링만', hint: '그러면 폼이 0.5 그대로라 누름이 없다 (sm_jig_params: 타일 없으면 0.5 = 자유 높이).' }] }],
+      apply: (s) => { s.layers.add('tile'); s.layers.add('ring'); s.layers.add('lid'); } },
     { id: 'db15', phase: '지그 장착', view: 'jig', title: 'DB15 블록과 케이블',
       say: 'S5 블록으로 DB15를 고정하고(잭나사 7229 두 개) 케이블을 꽂는다. 첫 기판은 DB15 브레이크아웃으로 손 측정, 그 뒤 MUX로 갈 때는 DB15 → DB25 어댑터 케이블.',
       tip: '케이블을 꽂고 빼는 것은 K2400 출력 OFF일 때만. 연결 순서는 "연결하는 법" 페이지.',
@@ -107,11 +113,11 @@
   ];
 
   const NOTES = [
-    'SM 보드 DB15 표: 1–8 셀 C1–C8, 9 AG+, 10 AG−, 11 R1, 12 R2, 14 GND (설계 세션이 확정)',
-    '손가락 레인 · 폭 배치와 접점 B7 · B8이 붙는 손가락(그림은 T2 · T8로 가정)',
-    '핀 12개 납땜 방식 (솔라셀 S 보드와 같게 할지)',
-    'SM 지그 3D 모델 (sm_jig_261026.glb)이 오면 그림 대신 3D로',
-    '홀더 포켓 26.54 mm는 가정값 (등록 틀 · 마스크 바깥)',
+    'SET 극성: fw CELL은 손가락 → HI, Ag → LO. 지금까지 kit 측정은 HI = Ag (+SET) → 맞출 것',
+    '솔라 받침 S1을 같이 쓰려면 SM 핀 꼬리 포켓 12개를 Task 10 받침에 추가 (결정 대기)',
+    'ITO 식각: 업체 패턴 유리 / 연구실 스텐실 + Zn/HCl (결정 대기)',
+    'ITO · Ag 면저항 (15 · 0.3 Ω/sq 가정), 홀더 포켓 26.54 mm (가정) 실측',
+    '그림의 손가락 몸통은 간략하게 그렸다 (정확한 모양은 gen1_ITO_fingers.dxf)',
   ];
 
   const TRACKS = { gen1: { title: '1세대 · 솔라셀 몸체 + SM', steps: GEN1_STEPS }, gen2: { title: '2세대 · XB16 (보관)', steps: GEN2_STEPS } };
@@ -131,7 +137,12 @@
   const NS = 'http://www.w3.org/2000/svg';
   const R = (x, y, w, h, cls, extra) => `<rect x="${(x).toFixed(3)}" y="${(-y - h).toFixed(3)}" width="${w.toFixed(3)}" height="${h.toFixed(3)}" ${cls || ''} ${extra || ''}/>`;
   const T = (x, y, s, size, anchor, fill) => `<text x="${x}" y="${-y}" font-size="${size || 1}" text-anchor="${anchor || 'middle'}" dominant-baseline="middle"${fill ? ` style="fill:${fill}"` : ''}>${esc(s)}</text>`;
-  function padRect(n) { const [x, y] = PIN[n]; const w = n[0] === 'T' ? 3.2 : 3.0, h = n[0] === 'T' ? 3.0 : 3.2; return [x - w / 2, y - h / 2, w, h]; }
+  function padRect(n) { const [x0, y0] = PIN[n], x = n[0] === 'B' ? Math.sign(x0) * PAD_C : x0, y = n[0] === 'T' ? Math.sign(y0) * PAD_C : y0;
+    const w = n[0] === 'T' ? 3.2 : 3.0, h = n[0] === 'T' ? 3.0 : 3.2; return [x - w / 2, y - h / 2, w, h]; }
+
+  function mirrorText(svg) {             // the drawing is mirrored (film up); text is re-placed at -x so it still reads left to right
+    return (svg.match(/<text[^>]*>[^<]*<\/text>/g) || []).map((t) => t.replace(/ x="([-0-9.]+)"/, (m, x) => ` x="${-parseFloat(x)}"`)).join('');
+  }
 
   function drawSub() {
     const s = st.sub, k = step(), padTask = k && task() && task().t === 'pads';
@@ -160,13 +171,14 @@
       const [x, y, w, h] = padRect(n), sel = padTask && st.padSel.has(n), off = UNUSED.includes(n);
       g += `<g class="${padTask ? 'pad' : ''}" data-pad="${n}"${padTask ? ' tabindex="0" role="button" aria-label="패드 ' + n + '"' : ''}>` +
         R(x, y, w, h, `style="fill:${sel ? 'var(--wipe)' : 'transparent'};stroke:${off ? 'var(--muted)' : 'var(--fg)'};stroke-width:${sel ? 0.22 : 0.1};${off ? 'stroke-dasharray:0.3 0.3' : ''}"`) +
-        T(PIN[n][0], PIN[n][1], n, 0.95, 'middle', off ? 'var(--muted)' : undefined) + '</g>';
+        T(x + w / 2, y + h / 2, n + (CELL[n] ? ' ' + CELL[n] : n === 'B8' ? ' R1' : n === 'B7' ? ' R2' : n === 'B3' ? ' AG+' : n === 'B4' ? ' AG−' : ''), 0.85, 'middle', off ? 'var(--muted)' : undefined) + '</g>';
     }
     let lab = '';
     if (s.ag) for (const n of FINGERS) lab += `<text x="${LANE(n)}" y="${-1.0}" font-size="0.62" text-anchor="middle" dominant-baseline="middle" style="fill:var(--fg);paint-order:stroke;stroke:var(--glass);stroke-width:0.28">${cellArea(n)}</text>`;
-    const caption = !s.ito ? '25 × 25 유리 (ITO 전면) · 점선 = 교차 구역' : !s.ag ? '점선 = 교차 구역 y = 2.0 ± 1.0' : '빨강 = 셀 (숫자 = mm²) · 손가락 레인은 개념';
+    const caption = !s.ito ? '25 × 25 유리 (ITO 전면) · 점선 = 교차 구역' : !s.ag ? '점선 = 교차 구역 y = 2.0 ± 1.0 · 몸통은 간략, 레인 · 폭은 설계값' : '빨강 = 셀 C1–C8 (숫자 = mm²)';
     $('bench').setAttribute('viewBox', '-17 -17 34 34');
-    $('bench').innerHTML = `<g>${g}${lab}</g>` + T(0, -14.6, caption, 1.05, 'middle', 'var(--muted)') + T(0, 15.3, '기판을 막면에서 본 그림 (지그 안에서는 이 면이 아래)', 1.0, 'middle', 'var(--muted)');
+    $('bench').innerHTML = `<g transform="scale(-1 1)">${g.replace(/<text[^>]*>[^<]*<\/text>/g, '')}</g>` + mirrorText(g + lab) + T(0, -14.6, caption, 1.05, 'middle', 'var(--muted)') +
+      T(0, 15.3, '막을 위로 두고 본 모습 (= DXF) · 지그에 넣으면 좌우가 바뀐다', 1.0, 'middle', 'var(--muted)');
   }
 
   const STACK = [   // side section of the jig, bottom to top (mm, not to scale in x)
@@ -174,7 +186,8 @@
     { key: 'pcb', label: 'SM 보드 1.6 + 핀 12', h: 1.6, fill: 'var(--pcb)' },
     { key: 'frame', label: 'S2 프레임 (0.8 턱 = 멈춤면)', h: 3.2, fill: 'var(--pom)' },
     { key: 'glass', label: '기판 1.1 (막면 아래)', h: 1.1, fill: 'var(--glass)' },
-    { key: 'ring', label: '누름 링 POM 1.0 + 폼 0.5', h: 1.5, fill: 'var(--muted)' },
+    { key: 'tile', label: '빈 dark 타일 0.2', h: 0.7, fill: 'var(--pom)' },
+    { key: 'ring', label: '누름 링 POM 1.0 + 폼 0.5 (→ 0.3)', h: 1.5, fill: 'var(--muted)' },
     { key: 'lid', label: 'S3 뚜껑 (자석 걸쇠)', h: 2.5, fill: 'var(--pom)' },
     { key: 'db15', label: 'S5 DB15 블록 → 케이블', h: 0, fill: 'var(--pom)' },
   ];
@@ -182,18 +195,18 @@
 
   function drawJig() {
     const s = st.sub, cur = step() && step().id;
-    const want = { body: ['base', 'pcb', 'frame'], glass: ['glass'], ring: ['ring', 'lid'], db15: ['db15'] }[cur] || [];
+    const want = { body: ['base', 'pcb', 'frame'], glass: ['glass'], ring: ['tile', 'ring', 'lid'], db15: ['db15'] }[cur] || [];
     let y = -9, g = '';
     for (const L of STACK) {
       const on = s.layers.has(L.key), next = want.includes(L.key) && !on, h = L.h || 1.2;
-      const w = L.key === 'glass' ? 9 : L.key === 'ring' ? 10 : L.key === 'db15' ? 4 : 12, x = -15 + (12 - w) / 2;
+      const w = L.key === 'glass' ? 9 : L.key === 'ring' || L.key === 'tile' ? 10 : L.key === 'db15' ? 4 : 12, x = -15 + (12 - w) / 2;
       g += R(x, y, w, h, `style="fill:${on ? L.fill : 'transparent'};stroke:${next ? 'var(--hl)' : 'var(--muted)'};stroke-width:${next ? 0.3 : 0.12};${on ? '' : 'stroke-dasharray:0.5 0.4'}"`);
       if (L.key === 'pcb' && on) for (let k = -4; k <= 4; k++) if (k) g += R(-9 + k * 1.2 - 0.15, y + h, 0.3, 2.4, 'style="fill:var(--pin)"');
       g += T(-1.5, y + h / 2, L.label, 0.95, 'start', on ? undefined : 'var(--muted)');
       y += h + (L.key === 'pcb' ? 0 : 0.5);
     }
     $('bench').innerHTML = g + T(0, -12.5, '지그 옆 단면 (두께 비율만) · 빨간 테두리 = 이 단계에서 올릴 것', 1.0, 'middle', 'var(--muted)') +
-      T(0, 13.5, '몸체는 솔라셀 싱글 지그 S1–S5 · 3D는 SM 지그 모델이 오면', 1.0, 'middle', 'var(--muted)');
+      T(0, 13.5, '몸체는 솔라셀 싱글 지그 S1–S5 · 3D는 첫 화면의 "1세대 SM"', 1.0, 'middle', 'var(--muted)');
   }
 
   function drawJig2() {
@@ -351,6 +364,7 @@
       }
     });
     if (WIPE.length !== 10) errs.push('닦을 패드 수가 10이 아님');
+    if (FINGERS.reduce((a, n) => a + AG_W * WIDTH[n], 0) !== 5) errs.push('셀 면적 합이 5.0 mm²가 아님');
     const cells = FINGERS.map((n) => WIDTH[n]); if (cells.filter((w) => w === 2).length !== 3 || cells.filter((w) => w === 1).length !== 3 || cells.filter((w) => w === 0.5).length !== 2) errs.push('셀 폭 3 / 3 / 2가 아님');
     if (FINGERS.length + AG_PADS.length + Object.keys(CONTACTS).length !== 12) errs.push('핀 수가 12가 아님');
     return errs;

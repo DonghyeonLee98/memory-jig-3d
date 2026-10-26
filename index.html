@@ -35,9 +35,11 @@ h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
 h2 { font-size: 15px; margin: 0 0 4px; }
 .sub { color: var(--muted); font-size: 12.5px; margin: 2px 0 0; }
 .label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--muted); margin: 0 0 6px; }
-.seg { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { font: inherit; font-size: 12.5px; padding: 7px 2px; border: 0; background: transparent; color: var(--fg); cursor: pointer; }
-.seg button + button { border-left: 1px solid var(--line); }
+.seg button { border-bottom: 1px solid var(--line); }
+.seg button:not(:nth-child(3n + 1)) { border-left: 1px solid var(--line); }
+.seg button:nth-last-child(-n + 3) { border-bottom: 0; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .row { display: flex; gap: 10px; align-items: center; }
 .row input { flex: 1; accent-color: var(--accent); }
@@ -89,7 +91,7 @@ a { color: var(--accent); }
 
     <div class="gen">
       <p class="label">1세대 (10/26 결정)</p>
-      <p>1세대는 솔라셀 지그 몸체(S1–S5)에 메모리용 SM 보드(핀 12, DB15)를 끼워 쓴다: 셀 8개(1.0 / 0.5 / 0.25 mm²) + Ag 줄 양끝 + 손가락 저항 접점 2. 이 화면의 XB16은 2세대용으로 보관한다. SM 지그 3D는 모델이 나오면 여기에 더한다.</p>
+      <p>1세대는 솔라셀 지그 몸체(S1–S5)에 메모리용 SM 보드(핀 12, DB15)를 끼워 쓴다: 셀 8개(1.0 / 0.5 / 0.25 mm²) + Ag 줄 양끝 + 손가락 저항 접점 2 (설계 10/26, 간섭 0). 보기 "1세대 SM"이 그 3D다. XB16은 2세대(8 × 8)용으로 보관한다.</p>
       <p class="links"><a href="assembly.html">조립하는 법 (연습)</a> · <a href="measure.html">연결하는 법 (연습)</a></p>
     </div>
 
@@ -97,7 +99,8 @@ a { color: var(--accent); }
       <p class="label">보기</p>
       <div class="seg" role="group" aria-label="보기 선택">
         <button id="v-all" aria-pressed="true">전체</button>
-        <button id="v-xb16" aria-pressed="false">XB16 지그</button>
+        <button id="v-sm" aria-pressed="false">1세대 SM</button>
+        <button id="v-xb16" aria-pressed="false">2세대 XB16</button>
         <button id="v-chip" aria-pressed="false">기판</button>
         <button id="v-evap" aria-pressed="false">증착 세트</button>
         <button id="v-mux" aria-pressed="false">MUX 보드</button>
@@ -138,17 +141,20 @@ a { color: var(--accent); }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="mem_models.js"></script>
+<script src="sm_models.js"></script>
 <script>
 (function () {
   const INFO = window.MEM_INFO || {};
   const GROUPS = [
-    { key: 'xb16', x: 0, y: 0, title: 'XB16 지그', scale: 1, step: 7 },
+    { key: 'sm', x: 0, y: -75, title: '1세대 SM 지그 (솔라셀 몸체)', scale: 1, step: 7 },
+    { key: 'xb16', x: 0, y: 0, title: '2세대 XB16 지그', scale: 1, step: 7 },
     { key: 'chip', x: 62, y: -10, title: 'crossbar 기판 (막 40배)', scale: 1, step: 2.2 },
     { key: 'evap', x: 62, y: 32, title: '증착 세트', scale: 1, step: 2.5 },
     { key: 'mux', x: -150, y: 0, title: 'MEM-MUX16 보드', scale: 1, step: 10 },
   ];
   const LAYERS = window.MEM_LAYERS || {};
   const LAYER_NAME = {
+    sm: ['받침 · 스테이션', 'SM 보드 · 핀 12', '틀 · DB15 블록', '시료 (1세대)', '빈 타일 · 누름 링 · 폼', '뚜껑'],
     xb16: ['받침 · 스테이션', 'PCB · 핀 · 센서', '틀 · DB25 블록', '시료', '누름 링', '뚜껑'],
     chip: ['유리', '아래 선 B', '페로브스카이트', '위 선 T'],
     evap: ['마스크 X1', '등록 틀', '기판'],
@@ -156,8 +162,26 @@ a { color: var(--accent); }
   };
 
   // English CAD names -> Korean description (what it is, why, numbers)
-  function describe(n) {
+  function describe(n, key) {
     const D = (t, d) => ({ t, d });
+    if (key === 'sm') {                      // 1st gen: solar single body + SM board (names come from the solar CAD)
+      if (/^base plate/.test(n)) return D('S1 받침 (솔라셀 싱글 지그와 같은 몸체)', '강구 3개 · 자석 2개 (키네마틱). 솔라 받침을 같이 쓰려면 SM 핀 꼬리 포켓 12개를 추가해야 한다 (결정 대기)');
+      if (/^bottom PCB/.test(n)) return D('SM 보드 (FR4 1.6, 핀 12, DB15)', 'S 보드와 외곽 · 구멍 · DB15 자리가 같고 (공통 형상 25개 편차 0.000) 핀 12개만 다르다. 센서 없음. KiCad DRC 오류 0 · 경고 0');
+      if (/^pin Mill-Max/.test(n)) { const m = n.match(/ (T\d|B\d) /), r = { T7: 'C1', T8: 'C2', T5: 'C3', T6: 'C4', T3: 'C5', T4: 'C6', T1: 'C7', T2: 'C8', B3: 'AG+', B4: 'AG−', B8: 'R1', B7: 'R2' }[m && m[1]];
+        return D('스프링 핀 Mill-Max 0906-1 ' + (m ? m[1] : '') + (r ? ' = ' + r : ''), '1세대 핀 12개: 손가락 8 (셀 C1–C8) + Ag 줄 양끝 2 + 손가락 저항 접점 2. 핀 플랜지–틀 개구 0.535 mm'); }
+      if (/^DB15 female/.test(n)) return D('DB15 암 직각 (NorComp)', '1–8 셀 C1–C8, 9 AG+, 10 AG−, 11 R1, 12 R2, 14 GND. MUX로는 DB15 → DB25 어댑터');
+      if (/^DB15 block bolt/.test(n)) return D('S5 블록 볼트 MISUMI SCB3-20 + 너트', '블록을 받침 밑 너트에 묶는다');
+      if (/^DB15 block/.test(n)) return D('S5 DB15 블록 (POM)', '앞판을 잭나사로 DB15에 묶어 케이블 힘이 PCB 대신 블록 · 받침으로 간다');
+      if (/^frame v2/.test(n)) return D('S2 프레임 (POM, 0.8 mm 턱 = 멈춤면)', '개구 23.4, 포켓 25.2. 1세대 패드는 가장자리 0.85–3.85라 턱과 0.05 mm 떨어진다');
+      if (/^sample: ITO glass/.test(n)) return D('시료 유리 25 × 25 × 1.1 (막 아래)', '1세대 1 × 8 기판');
+      if (/^sample: gen-1 ITO pads/.test(n)) return D('닦은 ITO 패드 10곳 (3.2 × 3.0)', '손가락 8 + 접점 2. 손가락 자체는 모델에 없음 (패턴은 gen1_ITO_fingers.dxf)');
+      if (/^sample: gen-1 Ag line/.test(n)) return D('Ag 줄 0.5 × 17.3 + 끝 패드 B3 · B4', '셀 = Ag 줄 × 손가락 폭: 1.0 / 0.5 / 0.25 mm² × 3 / 3 / 2');
+      if (/^blank dark stencil tile/.test(n)) return D('빈 dark 타일 0.2 (측정 마스크 자리)', '메모리 시료는 빛 마스크가 없어 이 타일을 넣어야 폼이 0.3으로 눌린다 (없으면 0.5 = 누름 없음)');
+      if (/^press ring/.test(n)) return D('S4 누름 링 POM 1.0 (1.1T 유리)', '유리 가장자리 띠만 누른다');
+      if (/^silicone foam/.test(n)) return D('실리콘 폼 0.5 (닫으면 0.3)', '뚜껑이 누르는 스프링');
+      if (/^hinged lid/.test(n)) return D('S3 뚜껑 (POM 2.5, 자석 걸쇠)', '창 19 → 23 mm');
+      if (/^bolt MISUMI SCB3-8/.test(n)) return D('볼트 MISUMI SCB3-8 + 너트', '받침 · SM 보드 · 프레임을 묶는다');
+    }
     if (/^base plate XB16/.test(n)) return D('받침 X1 (검정 POM 4 mm, CNC)', '바닥에 강구 3개·자석 2개 (키네마틱), 막 쪽 아래 창 12 mm. DB25 탭 70 mm, 블록 볼트 ±30, 꼬리 포켓 50.4 (10/24 검토: 60 mm 탭에서는 너트 포켓이 옆면으로 뚫렸음)');
     if (/^station plate/.test(n)) return D('스테이션 판 XS (POM 60 × 60 × 6)', '장비마다 하나. MS3-10 핀 두 개로 된 홈 3개에 강구가 앉아 지그가 늘 같은 자리에 놓인다. 솔라셀 지그와 같은 판');
     if (/^groove rod/.test(n)) return D('홈 핀 MISUMI MS3-10 (Ø3 × 10)', '스테이션에 두 개씩 접착해 V홈을 만든다. 스테이션 하나에 6개');
@@ -248,7 +272,8 @@ a { color: var(--accent); }
         o.material = new THREE.MeshStandardMaterial({ color: base, flatShading: true, roughness: metal ? 0.35 : 0.7, metalness: metal ? 0.5 : 0.05,
           transparent: glass, opacity: glass ? 0.6 : 1 });
         o.geometry.deleteAttribute && o.geometry.deleteAttribute('color');
-        o.userData = { group: G.key, name: pname, layer: layer[pname] || 0, z0: o.position.z, d: describe(pname) };
+        if (G.key === 'sm' && /TMP117|SHT45|photodiode|100 nF 0603 \+ 4.7 k/.test(pname)) { o.visible = false; return; }   // S-board sensors: not on the SM board
+        o.userData = { group: G.key, name: pname, layer: layer[pname] || 0, z0: o.position.z, d: describe(pname, G.key) };
         meshes.push(o);
       });
       if (++loaded === GROUPS.length) { document.getElementById('status').hidden = true; applyTheme(); fillTable(); frame('all', true); }
@@ -261,7 +286,8 @@ a { color: var(--accent); }
 
   // numbers
   const nums = [
-    ['지그 두께', (INFO.thickness || '') + ' mm'], ['핀 힘', (INFO.pin_force || '') + ' N/핀 · 16개 ' + (INFO.pin_force_total || '') + ' N'],
+    ['1세대 SM 지그', '솔라셀 몸체 + SM 보드 · 핀 12 · DB15'], ['1세대 셀', '8개 · 1.0 / 0.5 / 0.25 mm² × 3 / 3 / 2'],
+    ['XB16 지그 두께 (2세대)', (INFO.thickness || '') + ' mm'], ['XB16 핀 힘', (INFO.pin_force || '') + ' N/핀 · 16개 ' + (INFO.pin_force_total || '') + ' N'],
     ['뚜껑 모멘트 여유', (INFO.lid_margin || '') + '배'], ['DB25 탭', (INFO.tab_w || '') + ' mm'],
     ['패드 (가장자리 × 깊이)', (INFO.pad || []).join(' × ') + ' mm'],
     ['등록 틀 바깥 / 창', INFO.spacer ? INFO.spacer.outer_mm + ' / ' + INFO.spacer.window_mm + ' mm' : ''],
@@ -271,15 +297,15 @@ a { color: var(--accent); }
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   function fillTable() {
-    const keys = view === 'all' ? ['xb16'] : [view];
+    const keys = view === 'all' ? ['sm'] : [view];
     document.getElementById('tabletitle').textContent = '층 표 · ' + GROUPS.find((g) => g.key === keys[0]).title;
     const rows = [];
     for (const key of keys) {
       const seen = new Set();
       const list = (LAYERS[key] || []).slice().sort((a, b) => a[1] - b[1]);
       for (const [n, l] of list) {
-        const d = describe(n);
-        const t = /^pin Mill-Max/.test(n) ? '스프링 핀 Mill-Max 0906-1 ×16' : /^groove rod/.test(n) ? '홈 핀 MS3-10 ×6' :
+        const d = describe(n, key);
+        const t = /^pin Mill-Max/.test(n) ? '스프링 핀 Mill-Max 0906-1 ×' + (key === 'sm' ? 12 : 16) : /^groove rod/.test(n) ? '홈 핀 MS3-10 ×6' :
           /리드 릴레이 K([1-9]|[12]\d|3[0-2])\b/.test(n) ? '리드 릴레이 매트릭스 K1–K32' : /0603/.test(n) && key === 'mux' ? '0603 R·C' : d.t;
         if (seen.has(t)) continue; seen.add(t);
         const ln = (LAYER_NAME[key] || [])[l] || l;
@@ -319,8 +345,8 @@ a { color: var(--accent); }
     document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.id === 'v-' + key)));
     const G = GROUPS.find((g) => g.key === key);
     const t = ex.value / 100;
-    const target = key === 'all' ? new THREE.Vector3(-45, 4, 0) : new THREE.Vector3(G.x, 2 + (key === 'xb16' ? 8 : 0) * (1 + t), -G.y);
-    const base = key === 'all' ? 400 : key === 'mux' ? 230 : key === 'xb16' ? 120 + 60 * t : 55 + 20 * t;
+    const target = key === 'all' ? new THREE.Vector3(-45, 4, 0) : new THREE.Vector3(G.x, 2 + (key === 'xb16' || key === 'sm' ? 8 : 0) * (1 + t), -G.y);
+    const base = key === 'all' ? 400 : key === 'mux' ? 230 : key === 'xb16' || key === 'sm' ? 120 + 60 * t : 55 + 20 * t;
     const dist = base * Math.max(1, 1.2 / camera.aspect);
     const pos = target.clone().add(new THREE.Vector3(dist * 0.5, dist * 0.68, dist * 0.78));
     const id = ++animId;
@@ -329,7 +355,7 @@ a { color: var(--accent); }
     (function step(now) { if (id !== animId) return; const k = Math.min(1, (now - start) / 600), e = k * k * (3 - 2 * k);
       camera.position.lerpVectors(p0, pos, e); controls.target.lerpVectors(t0, target, e); if (k < 1) requestAnimationFrame(step); })(start);
   }
-  ['all', 'xb16', 'chip', 'evap', 'mux'].forEach((k) => document.getElementById('v-' + k).addEventListener('click', () => frame(k)));
+  ['all', 'sm', 'xb16', 'chip', 'evap', 'mux'].forEach((k) => document.getElementById('v-' + k).addEventListener('click', () => frame(k)));
   ex.addEventListener('input', () => { exv.textContent = ex.value + ' %'; applyExplode(); });
   ex.addEventListener('change', () => frame(view));
 
@@ -355,7 +381,7 @@ a { color: var(--accent); }
       const show = loaded === GROUPS.length && (view === 'all' || view === G.key);
       el.hidden = !show; if (!show) continue;
       const tt = (view === G.key || view === 'all') ? ex.value / 100 : 0;
-      v.set(G.x, (G.key === 'xb16' ? 22 + 40 * tt : G.key === 'mux' ? 18 + 12 * tt : 8 + 8 * tt), -(G.y + (G.key === 'mux' ? -52 : G.key === 'xb16' ? 0 : -16))).project(camera);
+      v.set(G.x, (G.key === 'xb16' || G.key === 'sm' ? 22 + 40 * tt : G.key === 'mux' ? 18 + 12 * tt : 8 + 8 * tt), -(G.y + (G.key === 'mux' ? -52 : G.key === 'xb16' ? 0 : -16))).project(camera);
       el.style.left = ((v.x + 1) / 2 * r.width) + 'px'; el.style.top = ((1 - v.y) / 2 * r.height) + 'px';
     }
     requestAnimationFrame(tick);

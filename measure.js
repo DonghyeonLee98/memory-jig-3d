@@ -2,22 +2,26 @@
 // Part 1: the chain as plain numbers (no DOM), so it can be self-tested. All device values are EXAMPLES (예시), not measured.
 (function () {
 'use strict';
-// SM board DB15 (relayed 10/26 decision; final table from the design session)
+// SM board DB15 = gen1_261026.json sm_db15 / pin_map (design session 10/26); finger and Ag resistances are its 15 / 0.3 ohm/sq estimates
 const DB15 = { 1: 'C1', 2: 'C2', 3: 'C3', 4: 'C4', 5: 'C5', 6: 'C6', 7: 'C7', 8: 'C8', 9: 'AG+', 10: 'AG−', 11: 'R1', 12: 'R2', 13: '—', 14: 'GND', 15: '—' };
-// concept lanes left to right: C1..C8 = fingers T7 T8 T5 T6 T3 T4 T1 T2, widths 2.0 1.0 2.0 1.0 2.0 1.0 0.5 0.5 mm (3 / 3 / 2)
-const WIDTH = { 1: 2.0, 2: 1.0, 3: 2.0, 4: 1.0, 5: 2.0, 6: 1.0, 7: 0.5, 8: 0.5 };
-const CONTACT = { 11: 8, 12: 2 };            // R1 (B7) -> finger of C8 (T2), R2 (B8) -> finger of C2 (T8): ASSUMED
+// lanes left to right (jig frame): C1..C8 = fingers T7 T8 T5 T6 T3 T4 T1 T2
+const FINGER = { 1: 'T7', 2: 'T8', 3: 'T5', 4: 'T6', 5: 'T3', 6: 'T4', 7: 'T1', 8: 'T2' };
+const WIDTH = { 1: 1.0, 2: 0.5, 3: 2.0, 4: 2.0, 5: 1.0, 6: 2.0, 7: 1.0, 8: 0.5 };
+const R_ITO = { 1: 62, 2: 129, 3: 47, 4: 71, 5: 69, 6: 70, 7: 69, 8: 136 };   // R_series_ito_ohm_15ohm_sq
+const R_AGS = { 1: 1.1, 2: 2.0, 3: 3.1, 4: 4.6, 5: 5.9, 6: 7.3, 7: 8.5, 8: 9.5 };   // R_series_ag_ohm_0p3ohm_sq (from AG-)
+const CONTACT = { 11: 2, 12: 8 };            // R1 = B8 -> finger T8 (C2), R2 = B7 -> finger T2 (C8)
+const RCHK = { 2: 45, 8: 32 };               // rchk_expected_ohm_15ohm_sq: pad + body + link band (no neck)
+const DB25 = { 1: 20, 2: 10, 3: 7, 4: 23, 5: 19, 6: 3, 7: 6, 8: 16, 9: 8, 10: 18, 11: 21, 12: 5, 14: 13 };   // adapter DB15 -> MUX DB25
 const AG_W = 0.5;                            // mm
-const R_ITO_SQ = 15, NECK_L = 1.5, BODY = 65; // ohm/sq (assumed), neck length mm, finger body ohm (50-80, middle)
-const R_AG = 13;                             // Ag line 0.5 x 21 mm, 100 nm, 0.3 ohm/sq (assumed)
+const R_AG = 10.4;                           // Ag line 0.5 x 17.3 mm between the end pads, 0.3 ohm/sq (assumed)
 const R_CABLE = 0.3;                         // per path, cable + relay (assumed)
 const R_HRS_1MM2 = 2e6;                      // EXAMPLE pristine cell, 1.0 mm²; scales as 1 / area (assumed shape)
 const R_PARASITIC = 3e5;                     // EXAMPLE: an unwiped pad = pin-perovskite-ITO cell of 9.6 mm² in series
 const OPEN = 1e12, FLOOR = 1e9;              // what the K2400 reads as open at 20 mV (10 pA floor)
 const area = (n) => AG_W * WIDTH[n];
-const rFinger = (n) => BODY + R_ITO_SQ * NECK_L / WIDTH[n];
+const rFinger = (n) => R_ITO[n];
 const rCell = (n) => R_HRS_1MM2 / area(n);
-const agShare = (n) => R_AG * (n - 0.5) / 8;  // B4 (AG−) to the cell, in lane order (concept)
+const agShare = (n) => R_AGS[n];             // B4 (AG−) to the cell
 
 function defaultState() {
   return { lid: null, wiped: null, output: null, route: null,
@@ -39,7 +43,7 @@ function between(s, a, b) {
     const share = e === 10 ? agShare(o.n) : R_AG - agShare(o.n);
     return r + share + rCell(o.n) + (o.k === 'cell' ? rFinger(o.n) : rFinger(o.n) * 0.15); }
   if (A.k === 'con' || B.k === 'con') { const c = A.k === 'con' ? A : B, o = A.k === 'con' ? B : A;
-    if (o.k === 'cell' && o.n === c.n) return r + rFinger(c.n);                             // RCHK: the finger itself
+    if (o.k === 'cell' && o.n === c.n) return r + RCHK[c.n];                                // RCHK: pad + body + link band
     return r + rFinger(c.n) * 0.15 + rCell(c.n) + Math.abs(agShare(c.n) - agShare(o.n)) + rCell(o.n) + (o.k === 'cell' ? rFinger(o.n) : 0); }
   return r + rFinger(A.n) + rCell(A.n) + Math.abs(agShare(A.n) - agShare(B.n)) + rCell(B.n) + rFinger(B.n);
 }
@@ -81,15 +85,15 @@ function firstRead(s) {
 function goodState() {
   const s = defaultState(); Object.assign(s, { lid: 'closed', wiped: true, output: 'off', route: 'breakout', cell: '3' });
   s.leads = { HI: '10', LO: '3' }; s.pc = { vread: '20', comp: '1', bipolar: true, offcheck: true };
-  s.chain = { ag: between(s, 9, 10), r1: between(s, 11, 8), r2: between(s, 12, 2), log: [] }; return s;
+  s.chain = { ag: between(s, 9, 10), r1: between(s, 11, 2), r2: between(s, 12, 8), log: [] }; return s;
 }
 function selfTest() {
   const t = [], ok = (name, pass) => t.push({ name, pass: !!pass });
   const g = goodState(), r0 = firstRead(g);
   ok('바른 순서: 셀 + 손가락 + Ag 몫 + 케이블', Math.abs(r0.r - r0.expect) / r0.expect < 0.01);
   ok('바른 순서: 고칠 것 없음', diagnose(g).length === 0);
-  ok('Ag 줄 9–10 ≤ 수십 Ω', g.chain.ag < 50);
-  ok('손가락 R1 · R2 = 60–125 Ω', g.chain.r1 > 60 && g.chain.r1 < 125 && g.chain.r2 > 60 && g.chain.r2 < 125);
+  ok('Ag 줄 9–10 ≈ 10 Ω', g.chain.ag > 8 && g.chain.ag < 15);
+  ok('R1 ≈ 45 Ω · R2 ≈ 32 Ω', Math.abs(g.chain.r1 - 45.6) < 1 && Math.abs(g.chain.r2 - 32.6) < 1);
   const u = goodState(); u.wiped = false; ok('안 닦으면 값이 커진다', firstRead(u).r > r0.r * 1.05);
   const h = goodState(); h.lid = 'half'; ok('뚜껑 덜 닫힘 → Ag 줄 열림', read(h, 9, 10).open);
   const w = goodState(); w.leads = { HI: '10', LO: '9' }; ok('9–10을 재면 13 Ω 근처', firstRead(w).r < 50);
@@ -100,7 +104,7 @@ function selfTest() {
   ok('GND · 빈 핀은 열림', read(g, 14, 3).open && read(g, 13, 10).open);
   return { pass: t.filter((x) => x.pass).length, total: t.length, tests: t };
 }
-const J = { DB15, WIDTH, CONTACT, area, rFinger, rCell, between, read, fmtR, defaultState, diagnose, firstRead, selfTest, MUX_ORDER, HAND_ORDER, R_AG };
+const J = { DB15, WIDTH, CONTACT, FINGER, DB25, RCHK, area, rFinger, rCell, between, read, fmtR, defaultState, diagnose, firstRead, selfTest, MUX_ORDER, HAND_ORDER, R_AG };
 window.MEAS = J;
 
 // Part 2: page
@@ -138,16 +142,16 @@ function cardHTML(id) {
       opt('route', 'breakout', 'DB15 브레이크아웃 (첫 기판)') + opt('route', 'mux', '어댑터 → MUX (CELL 명령)') + '</div>';
     case 'chain': {
       const c = st.chain, row = (k, t, v) => `<tr><td>${k}</td><td>${esc(t)}</td><td class="mono">${v == null ? '—' : esc(fmtR(v))}</td></tr>`;
-      return '<h2>4. 체인 점검</h2><p>K2400 20 mV read(또는 멀티미터 Ω)로 두 핀 사이를 잰다. 1 GΩ 열림은 K2400으로만 보인다. 재야 할 것: Ag 줄(AG+–AG−, 수십 Ω 이하), 손가락 저항 R1 · R2(각 접점과 그 손가락의 셀 핀, 기록해서 셀 값에서 뺀다).</p>' +
+      return '<h2>4. 체인 점검</h2><p>K2400 20 mV read(또는 멀티미터 Ω)로 두 핀 사이를 잰다. 1 GΩ 열림은 K2400으로만 보인다. 재야 할 것: Ag 줄 9–10 (≈ 10 Ω), R1 = 11–2 (T8–B8, ≈ 45 Ω), R2 = 12–8 (T2–B7, ≈ 32 Ω). R1 · R2는 패드 + 몸통 + 연결 띠라 면저항을 뽑아 손가락마다 칸 수를 곱한다 (값은 15 · 0.3 Ω/sq 가정).</p>' +
         '<div class="grid2">' + pinSel('pairA', '핀 A', st.pairA) + pinSel('pairB', '핀 B', st.pairB) + '</div><div class="opts"><button class="btn" type="button" data-probe>재기</button></div>' +
-        '<table><tr><th>점검</th><th>핀</th><th>값</th></tr>' + row('Ag 줄', '9 – 10', c.ag) + row('R1', '11 – 그 손가락 셀', c.r1) + row('R2', '12 – 그 손가락 셀', c.r2) + '</table>' +
+        '<table><tr><th>점검</th><th>핀</th><th>값</th></tr>' + row('Ag 줄', '9 – 10', c.ag) + row('R1', '11 – 2 (T8)', c.r1) + row('R2', '12 – 8 (T2)', c.r2) + '</table>' +
         (c.log.length ? '<p class="note mono">' + c.log.slice(-3).map(esc).join('<br>') + '</p>' : '') +
-        '<p class="note">R1 · R2가 붙는 손가락은 지금 그림에서 C8 · C2로 가정했다 (설계 세션 표로 바뀜).</p>';
+        '<p class="note">MUX로는 AGCHK (9 → HI, 10 → LO), RCHK 1 (2 → HI, 11 → LO), RCHK 2 (8 → HI, 12 → LO).</p>';
     }
     case 'leads': return st.route === 'mux'
-      ? '<h2>5. K2400 리드 (MUX 경유)</h2><p>K2400 HI · LO를 MUX 상자의 HI_POST · LO_POST에 꽂는다(2선, SENSE는 안 씀). 셀 고르기는 다음 단계의 명령이 한다.</p><p class="note">극성: 지금까지 측정은 HI = Ag (+전압으로 SET). MUX CELL이 Ag 줄을 HI 버스에 두는지 펌웨어에서 확인할 것.</p>'
+      ? '<h2>5. K2400 리드 (MUX 경유)</h2><p>K2400 HI · LO를 MUX 상자의 HI_POST · LO_POST에 꽂는다(2선, SENSE는 안 씀). 지그 DB15 → 어댑터 → MUX DB25 (1–12 → 20 10 7 23 19 3 6 16 8 18 21 5, 14 → 13). 셀 고르기는 다음 단계의 명령이 한다.</p><p class="note">극성 [확인 필요]: 10/26 펌웨어 CELL n은 손가락 → HI, Ag (선 10) → LO. 지금까지 kit 측정은 HI = Ag (+전압으로 SET)라 MUX로 옮기면 SET 부호가 뒤집힌다.</p>'
       : '<h2>5. K2400 리드 (브레이크아웃, 2선)</h2><p>셀 하나를 고르고 HI · LO를 꽂는다. 지금까지 측정과 같은 극성: <b>HI = 10 (AG−, Ag 줄)</b>, <b>LO = 셀 핀 n (ITO 손가락)</b>. SENSE는 안 쓴다.</p>' +
-        '<label class="field">셀<select data-sel="cell">' + [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}"${st.cell === String(n) ? ' selected' : ''}>C${n} · ${area(n).toFixed(2)} mm²</option>`).join('') + '</select></label>' +
+        '<label class="field">셀<select data-sel="cell">' + [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}"${st.cell === String(n) ? ' selected' : ''}>C${n} · ${FINGER[n]} · ${area(n).toFixed(2)} mm²</option>`).join('') + '</select></label>' +
         '<div class="grid2">' + pinSel('leads.HI', 'HI (빨강)', st.leads.HI) + pinSel('leads.LO', 'LO (검정)', st.leads.LO) + '</div>';
     case 'order': {
       const list = st.route === 'mux' ? MUX_ORDER : HAND_ORDER, decoys = st.route === 'mux'
@@ -225,7 +229,7 @@ $('card').addEventListener('click', (e) => {
     if (key === '9-10') { st.chain.ag = r.r; toast(r.open ? 'Ag 줄이 열림: 뚜껑 · 옆 핀 접촉을 본다.' : 'Ag 줄 ' + fmtR(r.r) + ' (수십 Ω 이하면 됨)'); }
     else if ((A === 11 || B === 11) && (A === CONTACT[11] || B === CONTACT[11])) { st.chain.r1 = r.r; toast('R1 손가락 ' + fmtR(r.r) + ' 기록'); }
     else if ((A === 12 || B === 12) && (A === CONTACT[12] || B === CONTACT[12])) { st.chain.r2 = r.r; toast('R2 손가락 ' + fmtR(r.r) + ' 기록'); }
-    else if (A === 11 || B === 11 || A === 12 || B === 12) toast('접점은 자기 손가락의 셀 핀과 잰다 (지금 가정: R1 ↔ C8, R2 ↔ C2). 다른 핀이면 셀을 지나 MΩ이 나온다.');
+    else if (A === 11 || B === 11 || A === 12 || B === 12) toast('접점은 자기 손가락의 셀 핀과 잰다: R1 = 11–2 (T8), R2 = 12–8 (T2). 다른 핀이면 셀을 지나 MΩ이 나온다.');
     else if ((A <= 8 && (B === 9 || B === 10)) || (B <= 8 && (A === 9 || A === 10))) toast('그건 셀이다 (' + fmtR(r.r) + '). 셀 처음 read는 8단계에서.');
     else toast(fmtR(r.r));
     last = null; render();
@@ -250,14 +254,15 @@ $('prev').addEventListener('click', () => go(cur - 1));
 $('next').addEventListener('click', () => go(cur + 1));
 $('reset').addEventListener('click', () => { st = defaultState(); last = null; go(0); });
 
-$('pinmap').innerHTML = '<tr><th>DB15</th><th>선</th><th>기판 핀</th></tr>' + [
-  ['1–8', '셀 C1–C8 (ITO 손가락, 셀 폭 2.0 ×3 · 1.0 ×3 · 0.5 ×2)', 'T1–T8 (순서는 설계 세션)'], ['9', 'AG+ (Ag 줄 한끝)', 'B3'], ['10', 'AG− (Ag 줄 다른 끝, 셀 측정의 Ag 쪽)', 'B4'],
-  ['11', 'R1 손가락 저항 접점', 'B7'], ['12', 'R2 손가락 저항 접점', 'B8'], ['14', 'GND', '—'], ['13 · 15', '빈 핀', '—']].map((r) => '<tr>' + r.map((c) => `<td>${esc(c)}</td>`).join('') + '</tr>').join('');
+$('pinmap').innerHTML = '<tr><th>DB15</th><th>선</th><th>기판 핀</th><th>MUX DB25</th></tr>' +
+  [1, 2, 3, 4, 5, 6, 7, 8].map((n) => [n, `C${n} (${WIDTH[n]} mm, ${area(n).toFixed(2)} mm²)`, FINGER[n], DB25[n]]).concat([
+    [9, 'AG+ (Ag 줄 끝)', 'B3', 8], [10, 'AG− (Ag 줄 다른 끝, 셀 측정의 Ag 쪽)', 'B4', 18], [11, 'R1 (T8 = C2의 접점)', 'B8', 21], [12, 'R2 (T2 = C8의 접점)', 'B7', 5],
+    [14, 'GND (쉘도 GND)', '—', 13], ['13 · 15', 'NC', '—', '—']]).map((r) => '<tr>' + r.map((c) => `<td>${esc(c)}</td>`).join('') + '</tr>').join('');
 $('dont').innerHTML = ['출력을 켠 채 선 · 리드 · 셀 바꾸기 (MUX는 출력 OFF + OE 인터록일 때만 전환)', '1 kΩ 직렬 상태로 SET (출력 ON 전에 BYPASS ON)',
   '처음 read를 ±20 mV보다 크게', '제한 전류를 kit 기본 1 mA 넘게 (RESET 3 mA는 오더에 적힌 대로만)', '닦지 않은 패드에 핀 대기', 'Ctrl-C로 끊은 뒤 앞면 OUTPUT을 안 보고 자리 뜨기']
   .map((t) => `<li>${esc(t)}</li>`).join('');
-$('notes').innerHTML = ['DB15 표 · 셀 순서 C1–C8 ↔ T 핀 · R1 · R2가 붙는 손가락 (설계 세션)', '셀 처음 저항 예시 = 2 MΩ × (1 mm² / 면적): 측정값 아님', '손가락 저항 = 몸체 65 Ω + 목 (15 Ω/sq 가정), Ag 줄 13 Ω (0.3 Ω/sq 가정)',
-  'MUX CELL의 HI/LO 배치: 지금까지 측정은 HI = Ag (+SET). 지시문 초안은 손가락 → HI라 맞춰야 함', 'SM 지그 3D (sm_jig_261026.glb)가 오면 그림 대신 3D로']
+$('notes').innerHTML = ['SET 극성: fw CELL = 손가락 HI · Ag LO, 지금까지 측정 = HI Ag → 맞출 것', '셀 처음 저항 예시 = 2 MΩ × (1 mm² / 면적): 측정값 아님',
+  '손가락 직렬 47–136 Ω · Ag 몫 1–10 Ω · R1 45 · R2 32 Ω는 15 / 0.3 Ω/sq 가정 (gen1_261026.json), 면저항은 실측', '어댑터 DB15 → DB25 케이블 품번 미정']
   .map((t) => `<li>${esc(t)}</li>`).join('');
 try { const t = selfTest(); $('selftest').textContent = '자체 점검: ' + t.pass + ' / ' + t.total + ' 통과 (바른 순서 = 예시 값, 실수마다 숫자가 맞는 방향으로)'; }
 catch (err) { $('selftest').textContent = '자체 점검 실패: ' + err.message; }
